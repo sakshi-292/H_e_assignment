@@ -1,0 +1,134 @@
+// InterveneAI – Prisma schema
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // `directUrl` is used by `prisma migrate` only. It bypasses any connection
+  // pooler (e.g. Supabase's PgBouncer on port 6543) which doesn't support
+  // the prepared statements migrations rely on. Locally we don't set it; the
+  // direct `url` is used for everything.
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  TEACHER
+  ADMIN
+}
+
+enum StudentStatus {
+  ACTIVE
+  NEEDS_SUPPORT
+  IMPROVING
+  ARCHIVED
+}
+
+enum GapSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum GapStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(TEACHER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students         Student[]          @relation("TeacherStudents")
+  createdPlans     InterventionPlan[] @relation("PlanAuthor")
+}
+
+model Student {
+  id        String        @id @default(cuid())
+  firstName String
+  lastName  String
+  email     String        @unique
+  grade     String
+  status    StudentStatus @default(ACTIVE)
+  notes     String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  teacherId String
+  teacher   User   @relation("TeacherStudents", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  learningGaps      LearningGap[]
+  interventionPlans InterventionPlan[]
+  progressNotes     ProgressNote[]
+
+  @@index([teacherId])
+}
+
+model LearningGap {
+  id          String      @id @default(cuid())
+  title       String
+  subject     String
+  severity    GapSeverity @default(MEDIUM)
+  description String
+  status      GapStatus   @default(OPEN)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+model InterventionPlan {
+  id        String     @id @default(cuid())
+  title     String
+  strategy  String
+  startDate DateTime
+  endDate   DateTime?
+  status    PlanStatus @default(DRAFT)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User   @relation("PlanAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+
+  progressNotes ProgressNote[]
+
+  @@index([studentId])
+  @@index([createdById])
+}
+
+model ProgressNote {
+  id        String   @id @default(cuid())
+  note      String
+  createdAt DateTime @default(now())
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  interventionPlanId String?
+  interventionPlan   InterventionPlan? @relation(fields: [interventionPlanId], references: [id], onDelete: SetNull)
+
+  @@index([studentId])
+  @@index([interventionPlanId])
+}

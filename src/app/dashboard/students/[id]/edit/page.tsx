@@ -1,0 +1,97 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { requireTeacherId } from "@/lib/auth-helpers";
+import { StudentForm } from "@/components/forms/student-form";
+import {
+  STUDENT_FORM_STATUSES,
+  type StudentFormValues,
+} from "@/lib/validators/student";
+import { updateStudent } from "../../actions";
+
+type EditStudentPageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function EditStudentPage({
+  params,
+}: EditStudentPageProps) {
+  const { id } = await params;
+  const teacherId = await requireTeacherId(`/dashboard/students/${id}/edit`);
+
+  const student = await prisma.student.findFirst({
+    where: { id, teacherId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      grade: true,
+      status: true,
+    },
+  });
+
+  if (!student) {
+    // Either the record doesn't exist or it belongs to another teacher.
+    // Either way, return 404.
+    notFound();
+  }
+
+  const status = (
+    STUDENT_FORM_STATUSES.includes(
+      student.status as (typeof STUDENT_FORM_STATUSES)[number]
+    )
+      ? student.status
+      : "ACTIVE"
+  ) as StudentFormValues["status"];
+
+  const defaultValues: StudentFormValues = {
+    firstName: student.firstName,
+    lastName: student.lastName,
+    email: student.email,
+    grade: student.grade,
+    status,
+  };
+
+  const update = updateStudent.bind(null, student.id);
+
+  return (
+    <div className="flex min-h-full flex-col bg-zinc-50 dark:bg-zinc-900/30">
+      <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <Link
+            href="/dashboard"
+            className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+          >
+            InterveneAI
+          </Link>
+          <Link
+            href="/dashboard/students"
+            className="text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          >
+            ← All students
+          </Link>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 lg:px-8">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Edit student
+          </h1>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Update {student.firstName} {student.lastName}&apos;s details.
+          </p>
+        </div>
+
+        <div className="mt-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-8">
+          <StudentForm
+            mode="edit"
+            defaultValues={defaultValues}
+            onSubmit={update}
+          />
+        </div>
+      </main>
+    </div>
+  );
+}
