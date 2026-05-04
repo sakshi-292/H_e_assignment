@@ -1,194 +1,134 @@
 # InterveneAI
 
-A web app for teachers to manage students, log learning gaps, and track intervention plans.
+A small web app that helps teachers track student learning gaps and run intervention plans, without using a spreadsheet.
 
-Built as a full-stack assignment using Next.js, Prisma, and PostgreSQL.
+Built as a full-stack assignment. The brief asked for a CRUD dashboard with auth and a clean data model. I focused on getting the data shape right, scoping every query to the logged-in teacher, and keeping the UI quiet enough that a tired teacher can use it at the end of a school day.
 
-## Features
+## Live demo
 
-- Sign up / sign in with email and password (NextAuth, JWT sessions, bcrypt-hashed passwords).
-- Student CRUD, scoped to the logged-in teacher.
-- Learning gap CRUD per student (subject, severity, status).
-- Intervention plan CRUD per student (strategy, date range, status).
-- Progress notes per plan (create, edit, delete).
-- Dashboard with counts of students, open gaps, and active plans.
-- Server-side ownership checks on every read and write.
+- **App:** https://h-e-assignment.vercel.app/ *(replace with your Vercel URL after deploy)*
+- **Demo teacher** (seeded): `priya.sharma@interveneai.test` / `demo1234`
+- Or sign up with any email at `/auth/signup`.
 
-## Tech stack
+The demo teacher comes with four students, learning gaps, two intervention plans, and a couple of progress notes already populated, so you can review the full UX without entering data first.
 
-- Next.js 16 (App Router)
-- React 19
-- TypeScript
+## What it does
+
+A teacher signs in and lands on a dashboard with three numbers: how many students they have, how many learning gaps are still open across them, and how many intervention plans are currently active. From there:
+
+- Add or edit a student (name, grade, status, email).
+- For any student, log learning gaps with subject, severity (low / medium / high), and a short description. Status moves from `open` to `in_progress` to `resolved`.
+- Create an intervention plan with a strategy, date range, and status (`draft`, `active`, `completed`, `cancelled`).
+- Append progress notes to a plan over time. Notes are editable and deletable.
+- Edit or delete anything you own. Nothing is shared between teachers.
+
+That's the whole product surface: 11 protected routes and 5 models (`User`, `Student`, `LearningGap`, `InterventionPlan`, `ProgressNote`).
+
+## Stack
+
+- Next.js 16 (App Router), React 19, TypeScript
 - Tailwind CSS v4
-- PostgreSQL 16
-- Prisma 6
-- NextAuth v4 (Credentials provider)
-- React Hook Form + Zod
-- bcryptjs
+- PostgreSQL 16, Prisma 6
+- NextAuth v4 (Credentials provider, JWT sessions, bcryptjs)
+- React Hook Form + Zod (the same schema validates client and server)
 
-## Demo credentials
+## Decisions worth flagging
 
-After running the seed script:
+These are the calls I made deliberately, not the things I inherited from a template.
 
-- Email: `priya.sharma@interveneai.test`
-- Password: `demo1234`
+1. **Server actions, not REST.** Every mutation is a Next.js server action that lives next to the route it serves (`app/dashboard/students/actions.ts`, etc.). Auth checks, validation, and `revalidatePath` calls all sit in one place per resource. No `/api/*` handlers, no client-side fetch wrappers.
 
-The demo teacher comes with a few students, gaps, plans, and notes pre-loaded so you can see the full UX without entering data yourself. You can also create a new account at `/auth/signup`.
+2. **Tenant scoping inside the Prisma query, not in middleware.** Every read and write filters by `teacherId` (and by `studentId`, `planId` where the chain matters). Helpers like `requireTeacherId()` and `requireOwnedStudent()` run at the top of every protected page and inside every action, so a server action never trusts a URL parameter.
+
+3. **One Zod schema per resource, used twice.** Forms on the client validate via `@hookform/resolvers/zod`. Server actions re-validate the same payload with the same schema. If the two ever drift, TypeScript catches it.
+
+4. **A `{ ok: true } | { ok: false; error }` return type for every action.** Errors come back as plain strings (with optional `fieldErrors`), so client buttons can render them uniformly. No thrown exceptions reach the user, no stack traces leak through.
+
+5. **Shared badge tones.** `src/lib/display/badges.ts` is the single source of truth for what an `OPEN` gap or a `NEEDS_SUPPORT` student looks like. Every page renders the same badge with one line.
+
+6. **A quiet UI.** No icons, no gradients, no animation. Status is communicated through colour and a small label. The interface is meant to disappear so the teacher can focus on which student needs what.
 
 ## Local setup
 
-### Requirements
-
-- Node.js 20 or newer
-- Docker (for the local Postgres container) or any reachable Postgres on TCP
-
-### 1. Install dependencies
+You need Node 20+ and Docker (for the bundled local Postgres).
 
 ```bash
 npm install
-```
-
-### 2. Start Postgres
-
-```bash
-npm run db:up
-```
-
-This starts Postgres 16 in Docker on `localhost:5433` (5433 to avoid clashing with any system-level Postgres on 5432). The script waits until the container reports healthy.
-
-### 3. Configure environment
-
-```bash
+npm run db:up           # starts Postgres on localhost:5433
 cp .env.example .env
-```
-
-The default `DATABASE_URL` matches the Docker container, so no edits are needed for local dev. Generate a real `NEXTAUTH_SECRET`:
-
-```bash
-openssl rand -base64 32
-```
-
-Paste that into `.env` as `NEXTAUTH_SECRET`. Leave `NEXTAUTH_URL="http://localhost:3000"`.
-
-### 4. Run migrations
-
-```bash
-npm run prisma:migrate
-```
-
-When prompted, name the migration `init`. This generates the Prisma client and creates all tables.
-
-### 5. Seed data
-
-```bash
-npm run db:seed
-```
-
-### 6. Run the app
-
-```bash
+openssl rand -base64 32 # paste output into NEXTAUTH_SECRET in .env
+npm run prisma:migrate  # name the migration "init" when prompted
+npm run db:seed         # creates the demo teacher and a few students
 npm run dev
 ```
 
 Open http://localhost:3000.
 
-### Stopping / resetting
+To stop and reset:
 
-- Stop the DB: `npm run db:down`
-- Wipe data and start over: `npm run db:reset`, then re-run steps 4 and 5.
+```bash
+npm run db:down       # stop the Postgres container
+npm run db:reset      # wipe the volume and restart
+```
+
+## Project layout
+
+```
+prisma/
+  schema.prisma         models, enums, relations
+  seed.ts               demo teacher, students, gaps, plans, notes
+
+src/app/
+  page.tsx              landing
+  auth/                 signup + login
+  dashboard/            protected routes; each has a colocated actions.ts
+  api/auth/             NextAuth handler
+
+src/components/
+  forms/                RHF + Zod form components
+  shared/               shared UI (DeleteActionButton, etc.)
+  layout/               landing page sections
+  students/, learning-gaps/, intervention-plans/, progress-notes/
+
+src/lib/
+  prisma.ts             Prisma client singleton (HMR-safe)
+  auth.ts               NextAuth options
+  auth-helpers.ts       requireTeacherId, requireOwnedStudent
+  display/badges.ts     shared status labels and Tailwind tones
+  validators/           one Zod schema per resource
+```
+
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Next.js dev server |
+| `npm run build` | Production build (runs `prisma migrate deploy` first) |
+| `npm run lint` | ESLint |
+| `npm run db:up` | Start local Postgres |
+| `npm run db:down` | Stop local Postgres |
+| `npm run db:reset` | Wipe DB volume and restart |
+| `npm run db:seed` | Seed demo data |
+| `npm run prisma:migrate` | Create + apply a dev migration |
+| `npm run prisma:studio` | Open Prisma Studio |
 
 ## Environment variables
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string |
-| `NEXTAUTH_SECRET` | Signs NextAuth session JWTs |
-| `NEXTAUTH_URL` | Public origin of the app |
+| `DATABASE_URL` | Postgres connection string. In production, point at your hosted DB. |
+| `DIRECT_URL` | Same DB but without the connection pooler. Only used by `prisma migrate`. |
+| `NEXTAUTH_SECRET` | Signs the NextAuth session JWT. |
+| `NEXTAUTH_URL` | Public origin of the app. |
 
 `.env.example` is checked in. `.env` is gitignored.
 
-## Scripts
-
-| Script | What it does |
-| --- | --- |
-| `npm run dev` | Next.js dev server |
-| `npm run build` | Production build |
-| `npm run lint` | ESLint |
-| `npm run db:up` | Start local Postgres |
-| `npm run db:down` | Stop local Postgres |
-| `npm run db:reset` | Wipe DB volume and restart |
-| `npm run prisma:generate` | Regenerate the Prisma client |
-| `npm run prisma:migrate` | Create and apply a dev migration |
-| `npm run prisma:studio` | Open Prisma Studio |
-| `npm run db:seed` | Seed demo data |
-
-## Routes
-
-Public:
-
-- `/` landing page
-- `/auth/signup` create a teacher account
-- `/auth/login` sign in
-
-Protected (require sign-in):
-
-- `/dashboard`
-- `/dashboard/students`
-- `/dashboard/students/new`
-- `/dashboard/students/[id]`
-- `/dashboard/students/[id]/edit`
-- `/dashboard/students/[id]/gaps/new`
-- `/dashboard/students/[id]/gaps/[gapId]/edit`
-- `/dashboard/students/[id]/plans/new`
-- `/dashboard/students/[id]/plans/[planId]`
-- `/dashboard/students/[id]/plans/[planId]/edit`
-
-API:
-
-- `/api/auth/[...nextauth]`
-
-All mutations live in server actions that sit next to the route they belong to (in `actions.ts` files).
-
-## Project structure
-
-```
-prisma/
-  schema.prisma         models, enums, relations
-  seed.ts               demo data
-
-src/
-  app/
-    api/auth/...        NextAuth handler
-    auth/               sign-in and sign-up screens
-    dashboard/          all protected routes
-    page.tsx            landing page
-  components/
-    forms/              form components (RHF + Zod)
-    layout/             landing page sections
-    shared/             shared UI pieces
-    students/, learning-gaps/, intervention-plans/, progress-notes/
-  lib/
-    auth.ts             NextAuth options
-    auth-helpers.ts     ownership helpers
-    prisma.ts           Prisma client singleton
-    display/badges.ts   shared status labels and styles
-    validators/         Zod schemas
-  types/
-    next-auth.d.ts      session and JWT type augmentation
-```
-
 ## Deployment
 
-The app is a standard Next.js server build (no static export).
+The app deploys to Vercel against any hosted Postgres. I used Supabase.
 
-1. Use a hosted Postgres provider (Supabase, Railway, RDS, etc.).
-2. Add `prisma migrate deploy` to your build command, e.g. `"build": "prisma migrate deploy && next build"`.
-3. Set the environment variables on your host:
-   - `DATABASE_URL` with `?sslmode=require`
-   - `NEXTAUTH_SECRET` (generate a fresh one for production)
-   - `NEXTAUTH_URL` set to your deployed origin
-4. After the first deploy, sign up through the app to create your first teacher account.
+1. Set the four env vars above in the Vercel project. For Supabase, `DATABASE_URL` should be the **pooled** connection (port 6543, with `?pgbouncer=true&connection_limit=1`); `DIRECT_URL` should be the **session-pooler** or direct connection (port 5432).
+2. The build script runs `prisma migrate deploy && next build`, so migrations apply on every deploy.
+3. After the first successful deploy, sign up through the live UI to create your teacher account.
 
-## License
-
-Personal project.
+Built by [Sakshi Chaurasia](https://github.com/sakshi-292).
