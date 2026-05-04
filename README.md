@@ -6,11 +6,19 @@ Built as a full-stack assignment. The brief asked for a CRUD dashboard with auth
 
 ## Live demo
 
-- **App:** https://h-e-assignment.vercel.app/ *(replace with your Vercel URL after deploy)*
+- **App:** https://h-e-assignment.vercel.app/
 - **Demo teacher** (seeded): `priya.sharma@interveneai.test` / `demo1234`
 - Or sign up with any email at `/auth/signup`.
 
 The demo teacher comes with four students, learning gaps, two intervention plans, and a couple of progress notes already populated, so you can review the full UX without entering data first.
+
+### Screens
+
+|  |  |
+| --- | --- |
+| ![Landing page](./docs/screenshots/landing.png) | ![Dashboard](./docs/screenshots/dashboard.png) |
+| ![Sign up](./docs/screenshots/signup.png) | ![Sign in](./docs/screenshots/signin.png) |
+| ![Students list (empty state)](./docs/screenshots/students-empty.png) | ![Add a student](./docs/screenshots/student-form.png) |
 
 ## What it does
 
@@ -32,21 +40,6 @@ That's the whole product surface: 11 protected routes and 5 models (`User`, `Stu
 - NextAuth v4 (Credentials provider, JWT sessions, bcryptjs)
 - React Hook Form + Zod (the same schema validates client and server)
 
-## Decisions worth flagging
-
-These are the calls I made deliberately, not the things I inherited from a template.
-
-1. **Server actions, not REST.** Every mutation is a Next.js server action that lives next to the route it serves (`app/dashboard/students/actions.ts`, etc.). Auth checks, validation, and `revalidatePath` calls all sit in one place per resource. No `/api/*` handlers, no client-side fetch wrappers.
-
-2. **Tenant scoping inside the Prisma query, not in middleware.** Every read and write filters by `teacherId` (and by `studentId`, `planId` where the chain matters). Helpers like `requireTeacherId()` and `requireOwnedStudent()` run at the top of every protected page and inside every action, so a server action never trusts a URL parameter.
-
-3. **One Zod schema per resource, used twice.** Forms on the client validate via `@hookform/resolvers/zod`. Server actions re-validate the same payload with the same schema. If the two ever drift, TypeScript catches it.
-
-4. **A `{ ok: true } | { ok: false; error }` return type for every action.** Errors come back as plain strings (with optional `fieldErrors`), so client buttons can render them uniformly. No thrown exceptions reach the user, no stack traces leak through.
-
-5. **Shared badge tones.** `src/lib/display/badges.ts` is the single source of truth for what an `OPEN` gap or a `NEEDS_SUPPORT` student looks like. Every page renders the same badge with one line.
-
-6. **A quiet UI.** No icons, no gradients, no animation. Status is communicated through colour and a small label. The interface is meant to disappear so the teacher can focus on which student needs what.
 
 ## Local setup
 
