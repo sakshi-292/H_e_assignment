@@ -125,3 +125,4 @@ The app deploys to Vercel against any hosted Postgres. I used Supabase.
 3. After the first successful deploy, sign up through the live UI to create your teacher account.
 
 Built by [Sakshi Chaurasia](https://github.com/sakshi-292).
+
