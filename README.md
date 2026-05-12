@@ -121,8 +121,9 @@ src/lib/
 The app deploys to Vercel against any hosted Postgres. I used Supabase.
 
 1. Set the four env vars above in the Vercel project. For Supabase, `DATABASE_URL` should be the **pooled** connection (port 6543, with `?pgbouncer=true&connection_limit=1`); `DIRECT_URL` should be the **session-pooler** or direct connection (port 5432).
-2. The build script runs `prisma migrate deploy && next build`, so migrations apply on every deploy.
-3. After the first successful deploy, sign up through the live UI to create your teacher account.
+2. The build script runs `prisma migrate deploy && tsx prisma/seed.ts && next build`, so migrations apply and the demo teacher is (re)provisioned on every deploy.
+3. The seed is idempotent: it upserts the demo teacher and demo students by email, and only inserts dependent rows (gaps, plans, notes) the first time a demo student has none. It never touches data belonging to teachers who signed up themselves.
+4. You can also sign up through the live UI to create your own teacher account.
 
 Built by [Sakshi Chaurasia](https://github.com/sakshi-292).
 
